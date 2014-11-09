@@ -5,8 +5,8 @@ Package go-qmp implements a [QEMU Machine Protocol](http://wiki.qemu.org/QMP) fo
 
 ### Installation
 
-    go get github.com/sergey-zhuravlev/go-qmp
+    go get github.com/0xef53/go-qmp
 
 ### Documentation
 
-Use [Godoc documentation](https://godoc.org/github.com/sergey-zhuravlev/go-qmp) for reference and usage.
+Use [Godoc documentation](https://godoc.org/github.com/0xef53/go-qmp) for reference and usage.

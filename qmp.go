@@ -77,7 +77,7 @@ func (qmpConn *QMP) SetDeadline(t time.Time) error {
 func (qmpConn *QMP) read() (buf []byte, err error) {
 	for {
 		r := &BaseResponse{}
-		buf, _, err = qmpConn.reader.ReadLine()
+		buf, err = qmpConn.reader.ReadBytes('\n')
 		if err != nil {
 			return nil, err
 		}

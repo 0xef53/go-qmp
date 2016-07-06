@@ -3,6 +3,7 @@ package qmp
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -14,12 +15,15 @@ const (
 
 var (
 	noDeadline = time.Time{}
+
+	ErrHandshake   = errors.New("QMP Handshake error: invalid greeting")
+	ErrNegotiation = errors.New("QMP Handshake error: negotiations failed")
 )
 
-type BaseResponse struct {
+type QMPResponse struct {
 	Return   *json.RawMessage `json:"return"`
 	Error    *QMPError        `json:"error"`
-	Event    *QMPEvent        `json:"event"`
+	Event    *json.RawMessage `json:"event"`
 	Greeting *json.RawMessage `json:"QMP"`
 }
 
@@ -28,10 +32,14 @@ type QMPError struct {
 	Desc  string `json:"desc"`
 }
 
+func (e *QMPError) Error() string {
+	return fmt.Sprintf("%s: %s", e.Class, e.Desc)
+}
+
 type QMPEvent struct {
-	Event     string           `json:"event"`
-	Data      *json.RawMessage `json:"data"`
-	Timestamp *EventTimestamp  `json:"timestamp"`
+	Event     string          `json:"event"`
+	Data      json.RawMessage `json:"data"`
+	Timestamp *EventTimestamp `json:"timestamp"`
 }
 
 type EventTimestamp struct {
@@ -39,45 +47,76 @@ type EventTimestamp struct {
 	Microseconds uint64 `json:"microseconds"`
 }
 
-type QMP struct {
-	path      string
-	sock      net.Conn
-	reader    *bufio.Reader
-	writer    *bufio.Writer
-	events    []string
-	negotiate bool
+type QMPCommand struct {
+	Execute   string      `json:"execute"`
+	Arguments interface{} `json:"arguments,omitempty"`
 }
 
-func NewQmpConn(path string) *QMP {
-	return &QMP{path: path, events: make([]string, 0, EVENTSCAP)}
+type QMPConn struct {
+	path     string
+	sock     net.Conn
+	reader   *bufio.Reader
+	writer   *bufio.Writer
+	events   []QMPEvent
+	greeting string
 }
 
-func (qmpConn *QMP) Connect(negotiate bool) ([]byte, error) {
-	c, err := net.Dial("unix", qmpConn.path)
+func Dial(path string) (*QMPConn, error) {
+	s, err := net.DialTimeout("unix", path, time.Second*10)
 	if err != nil {
 		return nil, err
 	}
-	qmpConn.sock = c
-	qmpConn.reader = bufio.NewReader(c)
-	qmpConn.writer = bufio.NewWriter(c)
-	if negotiate {
-		return qmpConn.negotiateCapabilities()
+	qmpConn := QMPConn{
+		path:   path,
+		sock:   s,
+		reader: bufio.NewReader(s),
+		writer: bufio.NewWriter(s),
+		events: make([]QMPEvent, 0, EVENTSCAP),
 	}
-	return nil, nil
+	if err := qmpConn.handshake(); err != nil {
+		s.Close()
+		return nil, err
+	}
+	return &qmpConn, nil
 }
 
-func (qmpConn *QMP) Close() {
-	qmpConn.sock.Close()
+func (c *QMPConn) handshake() error {
+	r := &QMPResponse{}
+	buf, err := c.read()
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(buf, &r); err != nil {
+		return err
+	}
+	if r.Greeting == nil {
+		return ErrHandshake
+	}
+	res, err := c.Run([]byte(`{"execute":"qmp_capabilities"}`))
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(res, &r); err != nil {
+		return err
+	}
+	if r.Return == nil {
+		return ErrNegotiation
+	}
+	return nil
 }
 
-func (qmpConn *QMP) SetDeadline(t time.Time) error {
-	return qmpConn.sock.SetDeadline(t)
+func (c *QMPConn) Close() {
+	c.sock.Close()
 }
 
-func (qmpConn *QMP) read() (buf []byte, err error) {
+func (c *QMPConn) SetDeadline(t time.Time) error {
+	return c.sock.SetDeadline(t)
+}
+
+func (c *QMPConn) read() (buf []byte, err error) {
 	for {
-		r := &BaseResponse{}
-		buf, err = qmpConn.reader.ReadBytes('\n')
+		r := QMPResponse{}
+		buf, err = c.reader.ReadBytes('\n')
 		if err != nil {
 			return nil, err
 		}
@@ -85,85 +124,58 @@ func (qmpConn *QMP) read() (buf []byte, err error) {
 			return nil, err
 		}
 		if r.Event != nil {
-			qmpConn.events = append(qmpConn.events, string(buf))
+			var event QMPEvent
+			if err := json.Unmarshal(buf, &event); err != nil {
+				return nil, err
+			}
+			c.events = append(c.events, event)
 			continue
 		}
 		break
 	}
-	return
+	return buf, nil
 }
 
-func (qmpConn *QMP) negotiateCapabilities() ([]byte, error) {
-	r := &BaseResponse{}
-	greeting, err := qmpConn.read()
-	if err != nil {
+func (c *QMPConn) GetEvents() ([]QMPEvent, error) {
+	if _, err := c.Run([]byte(`{"execute":"query-name"}`)); err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal(greeting, &r); err != nil {
-		return nil, err
-	}
-	if r.Greeting == nil {
-		return nil, fmt.Errorf("QMP Capabilities Error 1")
-	}
-	resp, err := qmpConn.RawCommand([]byte(`{"execute":"qmp_capabilities"}`))
-	if err != nil {
-		return nil, err
-	}
-	if err := json.Unmarshal(resp, &r); err != nil {
-		return nil, err
-	}
-	if r.Return == nil {
-		return nil, fmt.Errorf("QMP Capabilities Error 2")
-	}
-	return greeting, nil
-
+	events := make([]QMPEvent, len(c.events))
+	copy(events, c.events)
+	c.events = c.events[:0]
+	return events, nil
 }
 
-func (qmpConn *QMP) GetEvents(e []QMPEvent) error {
-	qmpConn.SetDeadline(time.Now().Add(0))
-	qmpConn.read()
-	qmpConn.SetDeadline(noDeadline)
-	event := &QMPEvent{}
-	for _, value := range qmpConn.events {
-		if err := json.Unmarshal([]byte(value), &event); err != nil {
-			return err
-		}
-		e = append(e, *event)
-	}
-	qmpConn.events = qmpConn.events[:0]
-	return nil
-}
-
-func (qmpConn *QMP) RawCommand(b []byte) ([]byte, error) {
-	if _, err := qmpConn.writer.Write(append(b, '\x0a')); err != nil {
+func (c *QMPConn) Run(b []byte) ([]byte, error) {
+	if _, err := c.writer.Write(append(b, '\x0a')); err != nil {
 		return nil, err
 	}
-	if err := qmpConn.writer.Flush(); err != nil {
+	if err := c.writer.Flush(); err != nil {
 		return nil, err
 	}
-	return qmpConn.read()
+	return c.read()
 }
 
-func (qmpConn *QMP) Command(q interface{}, r interface{}) error {
-	jStr, err := json.Marshal(q)
+func (c *QMPConn) Command(cmd interface{}, res interface{}) error {
+	jcmd, err := json.Marshal(cmd)
 	if err != nil {
 		return err
 	}
-	jRespStr, err := qmpConn.RawCommand(jStr)
+	jresp, err := c.Run(jcmd)
 	if err != nil {
 		return err
 	}
-	baseResp := &BaseResponse{}
-	if err := json.Unmarshal(jRespStr, &baseResp); err != nil {
+	resp := &QMPResponse{}
+	if err := json.Unmarshal(jresp, resp); err != nil {
 		return err
 	}
-	if baseResp.Error != nil {
-		return fmt.Errorf("%s: %s\n", baseResp.Error.Class, baseResp.Error.Desc)
+	if resp.Error != nil {
+		return resp.Error
 	}
-	if r == nil {
+	if res == nil {
 		return nil
 	}
-	if err := json.Unmarshal(*baseResp.Return, r); err != nil {
+	if err := json.Unmarshal(*resp.Return, res); err != nil {
 		return err
 	}
 	return nil

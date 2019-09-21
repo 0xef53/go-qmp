@@ -1,3 +1,4 @@
+// Package go-qmp implements a QEMU Machine Protocol (https://wiki.qemu.org/QMP) for the Go language.
 package qmp
 
 import (

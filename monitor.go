@@ -1,4 +1,3 @@
-// Package go-qmp implements a QEMU Machine Protocol (https://wiki.qemu.org/QMP) for the Go language.
 package qmp
 
 import (
@@ -249,6 +248,17 @@ func (m *Monitor) Run(cmd interface{}, res interface{}) error {
 	}
 
 	return nil
+}
+
+// RunHuman executes a command using "human-monitor-command".
+func (m *Monitor) RunHuman(cmdline string) (string, error) {
+	var out string
+
+	if err := m.Run(Command{"human-monitor-command", &HumanCommand{Cmd: cmdline}}, &out); err != nil {
+		return "", err
+	}
+
+	return out, nil
 }
 
 // GetEvents returns an event list of the specified type

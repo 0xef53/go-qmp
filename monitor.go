@@ -137,7 +137,8 @@ func (m *Monitor) handshake() error {
 
 // Close closes the QMP connection and releases all resources.
 //
-// After this call any interaction with the monitor will generate a panic.
+// After this call any interaction with the monitor
+// will generate an error of type net.OpError.
 func (m *Monitor) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -204,7 +205,8 @@ func (m *Monitor) Run(cmd interface{}, res interface{}) error {
 	defer m.mu.Unlock()
 
 	if m.closed {
-		panic("unable to work with closed monitor")
+		//panic("unable to work with closed monitor")
+		return m.err
 	}
 
 	b, err := json.Marshal(cmd)
@@ -268,7 +270,8 @@ func (m *Monitor) RunHuman(cmdline string) (string, error) {
 // (manually or using context.WithTimeout).
 func (m *Monitor) GetEvents(ctx context.Context, t string, after uint64) ([]Event, error) {
 	if m.closed {
-		panic("unable to work with closed monitor")
+		//panic("unable to work with closed monitor")
+		return nil, m.err
 	}
 
 	// m.evbuf.Get() can be interrupted by the global m.ctx,
@@ -292,7 +295,8 @@ func (m *Monitor) GetEvents(ctx context.Context, t string, after uint64) ([]Even
 // If no matches found, the second return value will be false.
 func (m *Monitor) FindEvents(t string, after uint64) ([]Event, bool) {
 	if m.closed {
-		panic("unable to work with closed monitor")
+		//panic("unable to work with closed monitor")
+		return nil, false
 	}
 
 	return m.evbuf.Find(t, after)

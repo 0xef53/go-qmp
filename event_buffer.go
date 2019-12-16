@@ -17,16 +17,39 @@ type eventBuffer struct {
 }
 
 func (eb *eventBuffer) find(t string, after uint64) ([]Event, bool) {
-	i := sort.Search(len(eb.events), func(i int) bool { return eb.events[i].Timestamp.Seconds >= after })
+	i := sort.Search(len(eb.events), func(i int) bool {
+		offset := (i + eb.cur) % len(eb.events)
+		return eb.events[offset].Timestamp.Seconds >= after
+	})
 
 	if i < len(eb.events) {
-		// Linear scan by event type
+		offset := (i + eb.cur) % len(eb.events)
+
 		out := make([]Event, 0)
-		for _, e := range eb.events[i:] {
-			if e.Type == t {
+
+		right := len(eb.events)
+		if i+eb.cur >= right {
+			// The buffer border is exceeded
+			right = offset
+		}
+
+		for _, e := range eb.events[offset:right] {
+			if e.Type == t || t == "" {
 				out = append(out, e)
 			}
 		}
+
+		left := offset
+		if left >= eb.cur {
+			left = 0
+		}
+
+		for _, e := range eb.events[left:eb.cur] {
+			if e.Type == t || t == "" {
+				out = append(out, e)
+			}
+		}
+
 		if len(out) > 0 {
 			return out, true
 		}

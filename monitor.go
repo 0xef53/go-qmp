@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"sync"
@@ -261,6 +262,30 @@ func (m *Monitor) RunHuman(cmdline string) (string, error) {
 	}
 
 	return out, nil
+}
+
+// RunTransaction executes a number of transactionable QAPI commands atomically.
+func (m *Monitor) RunTransaction(cmds []Command, res interface{}, properties *TransactionProperties) error {
+	args := struct {
+		Actions    []TransactionAction    `json:"actions"`
+		Properties *TransactionProperties `json:"properties,omitempty"`
+	}{
+		Actions:    make([]TransactionAction, 0, len(cmds)),
+		Properties: properties,
+	}
+
+	for _, cmd := range cmds {
+		if _, ok := AllowedTransactionActions[cmd.Name]; !ok {
+			return fmt.Errorf("Unknown transaction command", cmd.Name)
+		}
+		action := TransactionAction{
+			Type: cmd.Name,
+			Data: cmd.Arguments,
+		}
+		args.Actions = append(args.Actions, action)
+	}
+
+	return m.Run(Command{"transaction", &args}, &res)
 }
 
 // GetEvents returns an event list of the specified type

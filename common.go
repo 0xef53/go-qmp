@@ -8,7 +8,7 @@ import (
 // Command represents a QMP command. See https://wiki.qemu.org/QMP
 // and https://github.com/qemu/qemu/blob/master/docs/interop/qmp-spec.txt
 type Command struct {
-	Execute   string      `json:"execute"`
+	Name      string      `json:"execute"`
 	Arguments interface{} `json:"arguments,omitempty"`
 }
 
@@ -58,6 +58,35 @@ type Version struct {
 // over the human monitor.
 type HumanCommand struct {
 	Cmd string `json:"command-line"`
+}
+
+// TransactionAction is a common structure of a QAPI command
+// that can be executed as a part of transaction.
+type TransactionAction struct {
+	Type string      `json:"type"`
+	Data interface{} `json:"data"`
+}
+
+// TransactionProperties is a set of additional options
+// to control the execution of a transaction.
+type TransactionProperties struct {
+	CompletionMode string `json:"completion-mode"`
+}
+
+// AllowedTransactionActions is the list of QAPI commands
+// that can be performed with transaction.
+var AllowedTransactionActions = map[string]struct{}{
+	"abort":                           struct{}{},
+	"block-dirty-bitmap-add":          struct{}{},
+	"block-dirty-bitmap-clear":        struct{}{},
+	"x-block-dirty-bitmap-enable":     struct{}{},
+	"x-block-dirty-bitmap-disable":    struct{}{},
+	"x-block-dirty-bitmap-merge":      struct{}{},
+	"blockdev-backup":                 struct{}{},
+	"blockdev-snapshot":               struct{}{},
+	"blockdev-snapshot-internal-sync": struct{}{},
+	"blockdev-snapshot-sync":          struct{}{},
+	"drive-backup":                    struct{}{},
 }
 
 // DeviceDeletedEventData describes the properties of the DEVICE_DELETED event.

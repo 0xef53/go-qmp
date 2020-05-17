@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"sync"
@@ -78,7 +79,7 @@ func NewMonitor(path string, timeout time.Duration) (*Monitor, error) {
 		}()
 
 		switch err = mon.collect(ctx); {
-		case err == nil:
+		case err == nil, err == io.EOF:
 			// Function has been closed using Close() method.
 			// In this case we just make the error,
 			// indicating that the connection was closed:
@@ -436,7 +437,7 @@ func IsSocketNotAvailable(err error) bool {
 		switch err.(type) {
 		case *os.SyscallError:
 			if errno, ok := err.(*os.SyscallError).Err.(syscall.Errno); ok {
-				return errno == syscall.ENOENT || errno == syscall.ECONNREFUSED || errno == syscall.EPIPE
+				return errno == syscall.ENOENT || errno == syscall.ECONNREFUSED || errno == syscall.ECONNRESET || errno == syscall.EPIPE
 			}
 		}
 	}

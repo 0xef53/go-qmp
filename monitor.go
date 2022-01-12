@@ -380,6 +380,67 @@ loop:
 	return event, nil
 }
 
+// waitDeviceTrayMovedEvent waits a DEVICE_TRAY_MOVED event
+// with a specified state for the specified device.
+//
+// The state variable can be -1 (any states), 0 (closed) and 1 (opened).
+func (m *Monitor) waitDeviceTrayMovedEvent(ctx context.Context, device string, state int16, after uint64) (*Event, error) {
+	if state < -1 || state > 1 {
+		panic("incorrect state value")
+	}
+
+	var event *Event
+
+loop:
+	for {
+		events, err := m.GetEvents(ctx, "DEVICE_TRAY_MOVED", after)
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range events {
+			var data DeviceTrayMovedEventData
+			if err := json.Unmarshal(e.Data, &data); err != nil {
+				return nil, err
+			}
+			if data.Device == device || data.QdevID == device {
+				switch state {
+				case -1:
+					event = &e
+				case 0:
+					if !data.Open {
+						event = &e
+					}
+				case 1:
+					if data.Open {
+						event = &e
+					}
+				}
+				if event != nil {
+					break loop
+				}
+			}
+			after = e.Timestamp.Seconds
+		}
+	}
+
+	return event, nil
+}
+
+// WaitDeviceTrayMovedEvent waits a DEVICE_TRAY_MOVED event with any state for the specified device.
+func (m *Monitor) WaitDeviceTrayMovedEvent(ctx context.Context, device string, after uint64) (*Event, error) {
+	return m.waitDeviceTrayMovedEvent(ctx, device, -1, after)
+}
+
+// WaitDeviceTrayClosedEvent waits a DEVICE_TRAY_MOVED event with state == "close" for the specified device.
+func (m *Monitor) WaitDeviceTrayClosedEvent(ctx context.Context, device string, after uint64) (*Event, error) {
+	return m.waitDeviceTrayMovedEvent(ctx, device, 0, after)
+}
+
+// WaitDeviceTrayOpenedEvent waits a DEVICE_TRAY_MOVED event with state == "open" for the specified device.
+func (m *Monitor) WaitDeviceTrayOpenedEvent(ctx context.Context, device string, after uint64) (*Event, error) {
+	return m.waitDeviceTrayMovedEvent(ctx, device, 1, after)
+}
+
 // FindBlockJobErrorEvent tries to find a BLOCK_JOB_ERROR for the specified device.
 func (m *Monitor) FindBlockJobErrorEvent(device string, after uint64) (*Event, bool, error) {
 	events, found := m.FindEvents("BLOCK_JOB_ERROR", after)

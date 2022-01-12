@@ -123,6 +123,15 @@ type JobStatusChangeEventData struct {
 	Status string `json:"status"`
 }
 
+// DeviceTrayMovedEventData describes the properties of the DEVICE_TRAY_MOVED event.
+//
+// Emitted whenever the tray of a removable device is moved.
+type DeviceTrayMovedEventData struct {
+	Device string `json:"device"`
+	Open   bool   `json:"tray-open"`
+	QdevID string `json:"id"`
+}
+
 // GenericError represents a common structure for the QMP errors
 // that could be accurred. This type also used for errors that doesn't have
 // a specific class (for most of them in fact).

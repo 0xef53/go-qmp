@@ -136,22 +136,22 @@ func (err *GenericError) Error() string {
 }
 
 // CommandNotFound occurs when a requested command has not been found.
-type CommandNotFound interface {
-	Error() string
+type CommandNotFound struct {
+	*GenericError
 }
 
 // DeviceNotActive occurs when a device has failed to be become active.
-type DeviceNotActive interface {
-	Error() string
+type DeviceNotActive struct {
+	*GenericError
 }
 
 // DeviceNotFound occurs when a requested device has not been found.
-type DeviceNotFound interface {
-	Error() string
+type DeviceNotFound struct {
+	*GenericError
 }
 
 // KVMMissingCap occurs when a requested operation can't be
 // fulfilled because a required KVM capability is missing.
-type KVMMissingCap interface {
-	Error() string
+type KVMMissingCap struct {
+	*GenericError
 }

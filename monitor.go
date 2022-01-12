@@ -328,7 +328,7 @@ func (m *Monitor) FindEvents(t string, after uint64) ([]Event, bool) {
 	return m.evbuf.Find(t, after)
 }
 
-//
+// WaitDeviceDeletedEvent waits a DEVICE_DELETED event for the specified device.
 func (m *Monitor) WaitDeviceDeletedEvent(ctx context.Context, device string, after uint64) (*Event, error) {
 	var event *Event
 
@@ -419,13 +419,13 @@ func (m *Monitor) FindBlockJobCompletedEvent(device string, after uint64) (*Even
 func NewQMPError(err *GenericError) error {
 	switch err.Class {
 	case "CommandNotFound":
-		return CommandNotFound(err)
+		return &CommandNotFound{err}
 	case "DeviceNotActive":
-		return DeviceNotActive(err)
+		return &DeviceNotActive{err}
 	case "DeviceNotFound":
-		return DeviceNotFound(err)
+		return &DeviceNotFound{err}
 	case "KVMMissingCap":
-		return KVMMissingCap(err)
+		return &KVMMissingCap{err}
 	}
 	return err
 }

@@ -328,6 +328,25 @@ func (m *Monitor) FindEvents(t string, after uint64) ([]Event, bool) {
 	return m.evbuf.Find(t, after)
 }
 
+// WaitMachineResumeStateEvent waits a RESUME event.
+func (m *Monitor) WaitMachineResumeStateEvent(ctx context.Context, after uint64) (*Event, error) {
+	var event *Event
+
+loop:
+	for {
+		events, err := m.GetEvents(ctx, "RESUME", after)
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range events {
+			event = &e
+			break loop
+		}
+	}
+
+	return event, nil
+}
+
 // WaitDeviceDeletedEvent waits a DEVICE_DELETED event for the specified device.
 func (m *Monitor) WaitDeviceDeletedEvent(ctx context.Context, device string, after uint64) (*Event, error) {
 	var event *Event
